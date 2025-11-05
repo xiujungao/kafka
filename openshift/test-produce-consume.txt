@@ -1,0 +1,15 @@
+oc run ktools -n kafka --image=quay.io/strimzi/kafka:latest-kafka-3.7.0 --restart=Never -it
+
+bin/kafka-console-producer.sh \
+  --bootstrap-server test-cluster-kafka-bootstrap:9092 \
+  --producer-property security.protocol=SASL_PLAINTEXT \
+  --producer-property sasl.mechanism=SCRAM-SHA-512 \
+  --producer-property "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"test-app-client\" password=\"KHA0coNQtL2yH7dD3y68SHKPwNBTJi3E\";" \
+  --topic orders
+  
+bin/kafka-console-consumer.sh \
+  --bootstrap-server test-cluster-kafka-bootstrap:9092 \
+  --consumer-property security.protocol=SASL_PLAINTEXT \
+  --consumer-property sasl.mechanism=SCRAM-SHA-512 \
+  --consumer-property "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"test-app-client\" password=\"KHA0coNQtL2yH7dD3y68SHKPwNBTJi3E\";" \
+  --topic orders --from-beginning --group app-consumer-group  

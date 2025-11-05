@@ -1,0 +1,15 @@
+# Production Profile Configuration
+# For OpenShift/Strimzi Kafka with SCRAM-SHA-512 authentication
+
+# Update these values based on your Kafka cluster configuration
+spring:
+  kafka:
+    # SCRAM-SHA-512 Authentication (no TLS since tls: false in Kafka config)
+    security:
+      protocol: SASL_PLAINTEXT
+    properties:
+      # Kafka properties use dot notation as keys
+      sasl.mechanism: SCRAM-SHA-512
+      sasl.jaas.config: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="test-app-client" password="<your-password>";'
+
+
