@@ -5,7 +5,7 @@ spring:
   kafka:
     # SCRAM-SHA-512 Authentication (no TLS since tls: false in Kafka config)
     security:
-      protocol: SASL_PLAINTEXT
+      protocol: SASL_SSL
     properties:
       # Kafka properties use dot notation as keys
       sasl.mechanism: SCRAM-SHA-512

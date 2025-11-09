@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-orders-app
+  labels:
+    app: kafka-orders-app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: kafka-orders-app
+  template:
+    metadata:
+      labels:
+        app: kafka-orders-app
+    spec:
+      containers:
+        - name: kafka-orders-app
+          image: 'image-registry.openshift-image-registry.svc:5000/jackie/kafka-orders-app@latest'
+          ports:
+            - containerPort: 8080
+

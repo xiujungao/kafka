@@ -18,9 +18,6 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.security.KeyStore;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateFactory;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -90,45 +87,6 @@ public class KafkaConfig {
         return truststoreLocation;
     }
 
-    /**
-     * Load PEM certificate from resources and create a JKS truststore file
-     * This allows using PEM certificates directly without manual conversion
-     * @return Path to the created JKS truststore file, or null if certificate not found
-     */
-    private String createJKSFromPEM() {
-        try {
-            // Try to load PEM certificate from resources
-            ClassPathResource certResource = new ClassPathResource("kafka-ca.crt");
-            if (certResource.exists()) {
-                CertificateFactory cf = CertificateFactory.getInstance("X.509");
-                try (InputStream certInputStream = certResource.getInputStream()) {
-                    Certificate cert = cf.generateCertificate(certInputStream);
-                    
-                    // Create a temporary JKS truststore file
-                    File tempTruststore = File.createTempFile("kafka-truststore", ".jks");
-                    tempTruststore.deleteOnExit();
-                    
-                    // Create KeyStore and add certificate
-                    KeyStore trustStore = KeyStore.getInstance("JKS");
-                    trustStore.load(null, null);
-                    trustStore.setCertificateEntry("kafka-ca", cert);
-                    
-                    // Save to file (using empty password for development)
-                    String password = "changeit";
-                    try (FileOutputStream fos = new FileOutputStream(tempTruststore)) {
-                        trustStore.store(fos, password.toCharArray());
-                    }
-                    
-                    return tempTruststore.getAbsolutePath();
-                }
-            }
-        } catch (Exception e) {
-            // If PEM certificate loading fails, return null to use default truststore
-            System.err.println("Warning: Could not load PEM certificate from resources, using default truststore: " + e.getMessage());
-        }
-        return null;
-    }
-
     // Producer Configuration
     @Bean
     public ProducerFactory<String, Order> producerFactory() {
@@ -155,15 +113,6 @@ public class KafkaConfig {
         if (securityProtocol != null && securityProtocol.contains("SSL")) {
             // SSL truststore configuration
             String truststorePath = resolveTruststoreLocation(sslTruststoreLocation);
-            
-            // If no truststore location is specified, try to create one from PEM certificate
-            if (truststorePath == null && sslTruststorePassword == null) {
-                truststorePath = createJKSFromPEM();
-                if (truststorePath != null) {
-                    // Use default password for auto-generated truststore
-                    configProps.put("ssl.truststore.password", "changeit");
-                }
-            }
             
             if (truststorePath != null && !truststorePath.isEmpty()) {
                 configProps.put("ssl.truststore.location", truststorePath);
@@ -201,6 +150,24 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         
+        // Performance optimizations to reduce startup delay and improve responsiveness
+        // Reduce session timeout for faster rebalancing (default: 45s) - must be > 3x heartbeat
+        configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000); // 10 seconds
+        // Reduce heartbeat interval for faster failure detection (default: 3s) - must be < session.timeout/3
+        configProps.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 2000); // 2 seconds (less than 10s/3)
+        // Reduce metadata refresh interval to detect new partitions faster (default: 5 minutes)
+        configProps.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, 10000); // 10 seconds
+        // Reduce fetch wait time for faster message retrieval (default: 500ms)
+        configProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 100); // 100ms
+        // Reduce min fetch bytes to get messages immediately (default: 1 byte)
+        configProps.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1);
+        // Set max poll records for faster processing (default: 500)
+        configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
+        // Request timeout (default: 30s) - reduce for faster failure detection
+        configProps.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 15000); // 15 seconds
+        // Max poll interval - time allowed between poll calls (default: 5 minutes)
+        configProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000); // 5 minutes
+        
         // Security configuration if provided
         if (securityProtocol != null && !securityProtocol.isEmpty() && !securityProtocol.equals("PLAINTEXT")) {
             configProps.put("security.protocol", securityProtocol);
@@ -216,15 +183,6 @@ public class KafkaConfig {
         if (securityProtocol != null && securityProtocol.contains("SSL")) {
             // SSL truststore configuration
             String truststorePath = resolveTruststoreLocation(sslTruststoreLocation);
-            
-            // If no truststore location is specified, try to create one from PEM certificate
-            if (truststorePath == null && sslTruststorePassword == null) {
-                truststorePath = createJKSFromPEM();
-                if (truststorePath != null) {
-                    // Use default password for auto-generated truststore
-                    configProps.put("ssl.truststore.password", "changeit");
-                }
-            }
             
             if (truststorePath != null && !truststorePath.isEmpty()) {
                 configProps.put("ssl.truststore.location", truststorePath);
@@ -252,6 +210,15 @@ public class KafkaConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+        
+        // Performance optimizations for faster message consumption
+        // Set to auto-start immediately
+        factory.setAutoStartup(true);
+        // Reduce poll timeout for faster response (default: 5s)
+        factory.getContainerProperties().setPollTimeout(1000); // 1 second
+        // Enable batch processing for better throughput
+        factory.setBatchListener(false); // Set to true if you want batch processing
+        
         return factory;
     }
 }

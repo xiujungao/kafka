@@ -12,6 +12,14 @@ spring:
     bootstrap-servers: test-cluster-kafka-bootstrap-kafka.apps-crc.testing:443
     consumer:
       group-id: app-consumer-group
+      # Performance optimizations for faster consumption
+      properties:
+        # Reduce session timeout for faster rebalancing
+        session.timeout.ms: 10000
+        # Reduce metadata refresh for faster updates
+        metadata.max.age.ms: 30000
+        # Reduce fetch wait for faster message retrieval
+        fetch.max.wait.ms: 100
     # Kafka Security - SCRAM-SHA-512 with TLS (tls: true in Kafka config)
     security:
       protocol: SASL_SSL
