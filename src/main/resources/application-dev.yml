@@ -3,6 +3,7 @@
 
 spring:
   kafka:
+    bootstrap-servers: test-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
     # SCRAM-SHA-512 Authentication (no TLS since tls: false in Kafka config)
     security:
       protocol: SASL_SSL
